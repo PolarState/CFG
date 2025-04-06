@@ -1,8 +1,13 @@
-import math
-import random
-from typing import Optional
+# Functions to generate and validate cfg strings from cfg rules.
+# It would be helpful to create either a class to encapsulate this
+# or a dataclass which would hold some state. Reason being, the cfg
+# rules dont hold enough state. We have to derive the terminal and start
+# symbols in a few places and re-deriving them is inefficient.
+# Ultimately this isn't something that is hard or particularly time
+# consuming but if done in a loop is wasteful.
+# ^TODO if generation or validation is in the critical path.
 
-import cfg_defines
+import random
 
 
 def generate_from_cfg(
@@ -24,6 +29,58 @@ def generate_from_cfg(
     return "".join(generate_from_cfg(sym, cfg_rules) for sym in production)
 
 
+def get_terminal_symbols(cfg_rules):
+    # Find all terminal symbols in cfg.
+    terminal_symbols = []
+    for values in cfg_rules.values():
+        for value in values:
+            for v in value:
+                if v not in cfg_rules:
+                    terminal_symbols.append(v)
+                    
+    return (terminal_symbols)
+
+
+def _flatten_symbols(symbols):
+    flat_symbols = []
+    for symbol in symbols:
+        if isinstance(symbol, list):
+            flat_symbols.extend(_flatten_symbols(symbol))
+        else:
+            flat_symbols.append(symbol)
+    return flat_symbols
+
+
+# Only works with no cyclic dependencies. I forget if this is a pretense of CFGs.
+def get_longest_sequence(start_symbol, cfg_rules):
+    terminal_symbols = set(get_terminal_symbols(cfg_rules))
+    cfg_lengths = {ts:1 for ts in terminal_symbols}
+    rules = list(cfg_rules.keys())
+    
+    while rules:
+        next_rule = rules.pop()
+        nts_set = set(_flatten_symbols(cfg_rules[next_rule]))
+        calculate_length = True
+        for nts in nts_set:
+            # if we don't find all the symbols we need in our lengths, skip for now.
+            if nts not in cfg_lengths:
+                calculate_length = False
+                break
+    
+        if calculate_length:
+            generation_lengths = []
+            for generation_list in cfg_rules[next_rule]:
+                list_length = 0
+                for generation_rule in generation_list:
+                    list_length += cfg_lengths[generation_rule]
+                generation_lengths.append(list_length)
+            cfg_lengths[next_rule] = max(generation_lengths)
+        else:
+            rules.append(next_rule)
+            
+    return cfg_lengths[start_symbol]
+        
+
 def validate_string(input: str, start_symbol: str, cfg_rules: dict[str, str]):
     # TODO: derive the start symbol(s)
 
@@ -34,14 +91,11 @@ def validate_string(input: str, start_symbol: str, cfg_rules: dict[str, str]):
             reverse_cfg_rules[tuple(v)] = k
 
     # Find all terminal symbols in cfg.
-    terminal_symbols = []
-    for values in cfg_rules.values():
-        for value in values:
-            for v in value:
-                if v not in cfg_rules:
-                    terminal_symbols.append(v)
+    terminal_symbols = get_terminal_symbols(cfg_rules)
 
-    # Split input into terminal symbols.
+    # Split input string into array of terminal symbols.
+    # WARNING: this won't work if terminal symbols overlap ('1' and '11').
+    #   We can adopt a DP approach like parse_cfg if this is needed.
     max_t = max(len(t) for t in terminal_symbols)
     start = 0
     stop = 1
@@ -54,6 +108,7 @@ def validate_string(input: str, start_symbol: str, cfg_rules: dict[str, str]):
                 start = stop
                 found_t = True
             stop += 1
+        # If there is a non-terminal symbol then it's not a valid cfg.
         if not found_t:
             return False
 
@@ -86,15 +141,3 @@ def validate_string(input: str, start_symbol: str, cfg_rules: dict[str, str]):
 
     # return parse_cfg(tape, [start_symbol], reverse_cfg_rules)
     return parse_cfg(tape, [])
-
-
-cfg_rules = cfg_defines.cfg3b
-
-# Example Usage
-generated_string = generate_from_cfg("22", cfg_rules)
-print("Generated CFG String:", generated_string)
-
-# Validate a given sequence
-print(
-    f"Is '{generated_string}' in the CFG language? {validate_string(generated_string, '22', cfg_rules)}"
-)
