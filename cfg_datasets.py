@@ -1,5 +1,5 @@
 import torch
-import cfg_generator
+from . import cfg_generator
 
 from typing import Any
 
