@@ -4,7 +4,23 @@ from . import cfg_generator
 from typing import Any
 
 
-class CFGDataset(torch.utils.data.IterableDataset):
+class CFGFileDataset(torch.utils.data.Dataset):
+    def __init__(self, filename, device, window_length: int = 512):
+        super().__init__()
+        self.device = device
+
+        # load file.
+
+        # chop file into n segments.
+
+    def __getitem__(self, index):
+        return torch.tensor(self.corpus[index], device=self.device)
+
+    def __len__(self):
+        return self.length
+
+
+class CFGRandomGenerationDataset(torch.utils.data.IterableDataset):
     def __init__(
         self,
         cfg_rules: dict[str, str],
@@ -20,10 +36,12 @@ class CFGDataset(torch.utils.data.IterableDataset):
         self.start_symbol = start_symbol
         self.num_generations = num_generations
         self.idx = 0
-        self.generation_buffer = []
         self.window_length = window_length
         self.tokenizer = tokenizer
         self.device = device
+
+        # Make the first token the Eos token as it's the divider token between datasets.
+        self.generation_buffer = self.tokenizer.encode(self.tokenizer.eos_token)
 
     def __len__(self):
         return self.num_generations
@@ -43,14 +61,13 @@ class CFGDataset(torch.utils.data.IterableDataset):
         while len(self.generation_buffer) < self.window_length:
             self.generation_buffer.extend(
                 self.tokenizer.encode(
-                    self.tokenizer.bos_token
-                    + cfg_generator.generate_from_cfg(self.start_symbol, self.cfg_rules)
+                    cfg_generator.generate_from_cfg(self.start_symbol, self.cfg_rules)
                     + self.tokenizer.eos_token
                 )
             )
 
         # Update our fake iterator length.
-        self.idx += 1
+        self.idx += self.window_length
 
         # Generate tensors from our window.
         next_item = torch.tensor(
