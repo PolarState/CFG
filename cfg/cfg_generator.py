@@ -37,8 +37,8 @@ def get_terminal_symbols(cfg_rules):
             for v in value:
                 if v not in cfg_rules:
                     terminal_symbols.append(v)
-                    
-    return (terminal_symbols)
+
+    return terminal_symbols
 
 
 def _flatten_symbols(symbols):
@@ -51,12 +51,29 @@ def _flatten_symbols(symbols):
     return flat_symbols
 
 
+def get_start_symbols(cfg_rules) -> list[str]:
+    rules = list(cfg_rules.keys())
+
+    # Create a set of all symbols created FROM a production rule.
+    output_symbols = set()
+    for rule in rules:
+        output_symbols = output_symbols.union(set(_flatten_symbols(cfg_rules[rule])))
+
+    # Find production rule that is not in the set created.
+    start_symbols = set()
+    for rule in rules:
+        if rule not in output_symbols:
+            start_symbols.add(rule)
+
+    return start_symbols
+
+
 # Only works with no cyclic dependencies. I forget if this is a pretense of CFGs.
 def get_longest_sequence(start_symbol, cfg_rules):
     terminal_symbols = set(get_terminal_symbols(cfg_rules))
-    cfg_lengths = {ts:1 for ts in terminal_symbols}
+    cfg_lengths = {ts: 1 for ts in terminal_symbols}
     rules = list(cfg_rules.keys())
-    
+
     while rules:
         next_rule = rules.pop()
         nts_set = set(_flatten_symbols(cfg_rules[next_rule]))
@@ -66,7 +83,7 @@ def get_longest_sequence(start_symbol, cfg_rules):
             if nts not in cfg_lengths:
                 calculate_length = False
                 break
-    
+
         if calculate_length:
             generation_lengths = []
             for generation_list in cfg_rules[next_rule]:
@@ -77,9 +94,9 @@ def get_longest_sequence(start_symbol, cfg_rules):
             cfg_lengths[next_rule] = max(generation_lengths)
         else:
             rules.append(next_rule)
-            
+
     return cfg_lengths[start_symbol]
-        
+
 
 def validate_string(input: str, start_symbol: str, cfg_rules: dict[str, str]):
     # TODO: derive the start symbol(s)
