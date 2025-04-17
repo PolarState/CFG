@@ -92,3 +92,22 @@ cfg3f = {
     "8": [["3", "1", "1"], ["1", "2"], ["3", "3", "1"]],
     "7": [["2", "2", "1"], ["3", "2", "2"], ["3", "1", "2"], ["3", "2"]],
 }
+
+
+def get_cfg(name: str) -> dict[str, list[list[str]]]:
+    cfg = None
+    if name == "cfg3b":
+        cfg = cfg3b
+    elif name == "cfg3b":
+        cfg = cfg3i
+    elif name == "cfg3i":
+        cfg = cfg3h
+    elif name == "cfg3h":
+        cfg = cfg3g
+    elif name == "cfg3g":
+        cfg = cfg3f
+    elif name == "cfg3f":
+        cfg = cfg3b
+    else:
+        raise ValueError
+    return cfg
