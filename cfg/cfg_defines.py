@@ -94,20 +94,16 @@ cfg3f = {
 }
 
 
+cfg_by_name = {
+    "cfg3b": cfg3b,
+    "cfg3i": cfg3i,
+    "cfg3h": cfg3h,
+    "cfg3g": cfg3g,
+    "cfg3f": cfg3f,
+}
+
+
 def get_cfg(name: str) -> dict[str, list[list[str]]]:
-    cfg = None
-    if name == "cfg3b":
-        cfg = cfg3b
-    elif name == "cfg3b":
-        cfg = cfg3i
-    elif name == "cfg3i":
-        cfg = cfg3h
-    elif name == "cfg3h":
-        cfg = cfg3g
-    elif name == "cfg3g":
-        cfg = cfg3f
-    elif name == "cfg3f":
-        cfg = cfg3b
-    else:
-        raise ValueError
-    return cfg
+    if name in cfg_by_name:
+        return cfg_by_name[name]
+    raise ValueError("cfg not defined by name. Did you forget to add it?")
