@@ -6,9 +6,10 @@ from cfg import cfg_datasets, cfg_defines, cfg_generator
 
 import transformers
 
-OUTPUT_FILE_PATH = "../datasets/test.bin"
+OUTPUT_FILE_PATH = "../datasets/cfg3f_validation_dataset.bin"
+OUTPUT_FILE_PATH = "../datasets/cfg3f_train_dataset.bin"
 
-CFG = cfg_defines.cfg3b
+CFG = cfg_defines.cfg3f
 CONTEXT_LENGTH = 512
 
 cfg_start_symbols = list(cfg_generator.get_start_symbols(CFG))[0]
@@ -18,7 +19,7 @@ tokenizer = transformers.GPTNeoXTokenizerFast.from_pretrained("openai-community/
 new_dataset = cfg_datasets.CFGRandomGenerationDataset(
     CFG,
     cfg_start_symbols,
-    num_generations=1 * 96 * 512,
+    num_generations=100000 * 96 * 512,
     tokenizer=tokenizer,
     window_length=CONTEXT_LENGTH,
 )

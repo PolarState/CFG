@@ -20,11 +20,7 @@ class CFGFileDataset(torch.utils.data.Dataset):
         self.filename = filename
         self.window_length = window_length
 
-        self.file_size = os.stat(self.filename).st_size
         self.dataset = []
-        self.attention_mask = [1] * self.window_length
-        self.idx = 0
-        self.length = self.file_size / self.window_length
 
         with open(self.filename, "rb") as f:
             while True:
@@ -47,7 +43,7 @@ class CFGFileDataset(torch.utils.data.Dataset):
         return torch.tensor(self.dataset[index], device=self.device)
 
     def __len__(self):
-        return self.length
+        return len(self.dataset) - 1
 
 
 class CFGRandomGenerationDataset(torch.utils.data.IterableDataset):
@@ -69,9 +65,8 @@ class CFGRandomGenerationDataset(torch.utils.data.IterableDataset):
         self.window_length = window_length
         self.tokenizer = tokenizer
         self.device = device
-        self.eos_string = "E"
         self.bos_string = "B"
-        self.eos_token = self.tokenizer.tokenize(self.eos_string)
+        self.eos_token = self.tokenizer.eos_token
         self.bos_token = self.tokenizer.tokenize(self.bos_string)
 
         # Make the first token the Eos token as it's the divider token between datasets.
