@@ -1,4 +1,4 @@
-import os
+import random
 import struct
 from typing import Any
 
@@ -9,9 +9,9 @@ import torch
 
 class CFGFileDataset(torch.utils.data.Dataset):
     """Dataset to load a cfg from a file.
-    
+
     The file needs to already contain token ids.
-    
+
     """
 
     def __init__(self, filename, device, window_length: int = 512):
@@ -50,7 +50,6 @@ class CFGRandomGenerationDataset(torch.utils.data.IterableDataset):
     def __init__(
         self,
         cfg_rules: dict[str, str],
-        start_symbol: str,
         num_generations: int,
         tokenizer: Any,
         device: torch.device = torch.device("cpu"),
@@ -59,15 +58,12 @@ class CFGRandomGenerationDataset(torch.utils.data.IterableDataset):
         """Each CFG could be drawn from infinite times. To satisfy PyTorch Dataset, we ask for the length."""
         super().__init__()
         self.cfg_rules = cfg_rules
-        self.start_symbol = start_symbol
         self.num_generations = num_generations
         self.idx = 0
         self.window_length = window_length
         self.tokenizer = tokenizer
         self.device = device
-        self.bos_string = "B"
-        self.eos_token = self.tokenizer.eos_token
-        self.bos_token = self.tokenizer.tokenize(self.bos_string)
+        self.start_symbols = cfg_generator.get_start_symbols(cfg_rules=self.cfg_rules)
 
         # Make the first token the Eos token as it's the divider token between datasets.
         self.generation_buffer = []
@@ -87,23 +83,21 @@ class CFGRandomGenerationDataset(torch.utils.data.IterableDataset):
 
         # Fill our generation buffer up to our widow length.
         while len(self.generation_buffer) < self.window_length:
-            self.generation_buffer.extend(self.bos_token)
+            self.generation_buffer.extend(self.tokenizer.bos_token)
             self.generation_buffer.extend(
-                self.tokenizer.tokenize(c)[0]
+                self.tokenizer.encode(c)[0]
                 for c in cfg_generator.generate_from_cfg(
-                    self.start_symbol, self.cfg_rules
+                    random.choice(self.start_symbols), self.cfg_rules
                 )
             )
-            self.generation_buffer.extend(self.eos_token)
+            self.generation_buffer.extend(self.tokenizer.eos_token)
 
         # Update our fake iterator length.
         self.idx += self.window_length
 
         # Generate tensors from our window.
         next_item = torch.tensor(
-            self.tokenizer.convert_tokens_to_ids(
-                self.generation_buffer[: self.window_length]
-            ),
+            self.generation_buffer[: self.window_length],
             device=self.device,
         )
 
