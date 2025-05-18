@@ -5,3 +5,6 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cfg"
 version = "1.0.0"
+
+[tool.setuptools]
+packages = ["cfg"]
