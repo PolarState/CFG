@@ -8,6 +8,7 @@
 # ^TODO if generation or validation is in the critical path.
 
 import random
+from typing import Any
 
 
 def generate_from_cfg(
@@ -29,7 +30,7 @@ def generate_from_cfg(
     return "".join(generate_from_cfg(sym, cfg_rules) for sym in production)
 
 
-def get_terminal_symbols(cfg_rules):
+def get_terminal_symbols(cfg_rules) -> list[Any]:
     # Find all terminal symbols in cfg.
     terminal_symbols = []
     for values in cfg_rules.values():
@@ -38,7 +39,7 @@ def get_terminal_symbols(cfg_rules):
                 if v not in cfg_rules:
                     terminal_symbols.append(v)
 
-    return terminal_symbols
+    return list(set(terminal_symbols))
 
 
 def _flatten_symbols(symbols):
@@ -65,7 +66,7 @@ def get_start_symbols(cfg_rules) -> list[str]:
         if rule not in output_symbols:
             start_symbols.add(rule)
 
-    return start_symbols
+    return list(start_symbols)
 
 
 # Only works with no cyclic dependencies. I forget if this is a pretense of CFGs.
