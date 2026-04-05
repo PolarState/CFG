@@ -1,17 +1,18 @@
-from nltk import CFG
-from nltk.grammar import Nonterminal
+def count_generations(start_symbol, cfg_rules):
+    """Count the total number of sentences (derivation paths) a CFG can produce.
 
+    Args:
+        start_symbol: the nonterminal to start from.
+        cfg_rules: dictionary of nonterminal -> list of production sequences.
 
-def count_generations(grammar):
-    """
-    Count the total number of sentences (derivation paths) a CFG can produce.
-    Returns the count for the start symbol, or None if the grammar is recursive.
+    Returns:
+        The count for the start symbol, or None if the grammar is recursive.
     """
     COMPUTING = object()
     counts = {}
 
     def compute(symbol):
-        if not isinstance(symbol, Nonterminal):
+        if symbol not in cfg_rules:  # terminal
             return 1
 
         if symbol in counts:
@@ -22,9 +23,9 @@ def count_generations(grammar):
         counts[symbol] = COMPUTING
 
         total = 0
-        for prod in grammar.productions(lhs=symbol):
+        for production in cfg_rules[symbol]:
             prod_count = 1
-            for sym in prod.rhs():
+            for sym in production:
                 sym_count = compute(sym)
                 if sym_count is None:
                     counts[symbol] = None
@@ -35,60 +36,72 @@ def count_generations(grammar):
         counts[symbol] = total
         return total
 
-    result = compute(grammar.start())
+    return compute(start_symbol)
+
+
+def count_generations_verbose(start_symbol, cfg_rules):
+    """Same as count_generations but prints per-nonterminal breakdown."""
+    result = count_generations(start_symbol, cfg_rules)
 
     if result is not None:
+        # Recompute per-nonterminal counts for display.
+        counts = _count_per_nonterminal(cfg_rules)
         print(f"\nPer-nonterminal counts:")
-        for nt, count in sorted(counts.items(), key=lambda x: str(x[0])):
-            print(f"  {nt} -> {count:,}")
-        print(f"\nTotal generations from {grammar.start()}: {result:,}")
+        for nt in sorted(counts.keys()):
+            print(f"  {nt} -> {counts[nt]:,}")
+        print(f"\nTotal generations from {start_symbol}: {result:,}")
 
     return result
 
 
-if __name__ == "__main__":
-    # Test against the grammars from nltk_exhaustive.py
-    cfg3b_short_str = """
-        16 -> 15 13
-        15 -> 12 11 10 | 11 12 10
-        14 -> 11 10 12 | 10 11 12
-        13 -> 11 12 | 12 11
-        12 -> 8 9 7 | 9 7 8
-        11 -> 8 7 9 | 7 8 9
-        10 -> 7 9 8 | 9 8 7
-        9 -> '321' | '21'
-        8 -> '32' | '312'
-        7 -> '31' | '123'
+def _count_per_nonterminal(cfg_rules):
+    """Return a dict mapping each nonterminal to its generation count."""
+    counts = {}
+
+    def compute(symbol):
+        if symbol not in cfg_rules:
+            return 1
+        if symbol in counts:
+            return counts[symbol]
+
+        total = 0
+        for production in cfg_rules[symbol]:
+            prod_count = 1
+            for sym in production:
+                prod_count *= compute(sym)
+            total += prod_count
+
+        counts[symbol] = total
+        return total
+
+    for nt in cfg_rules:
+        compute(nt)
+
+    return counts
+
+
+def _count_per_production(cfg_rules):
+    """Return a dict mapping each nonterminal to a list of per-production counts."""
+    nt_counts = _count_per_nonterminal(cfg_rules)
+    prod_counts = {}
+
+    for nt, productions in cfg_rules.items():
+        counts = []
+        for production in productions:
+            prod_count = 1
+            for sym in production:
+                prod_count *= nt_counts.get(sym, 1)
+            counts.append(prod_count)
+        prod_counts[nt] = counts
+
+    return prod_counts
+
+
+def uniform_sentence_weights(cfg_rules):
+    """Compute production weights that sample uniformly over all possible sentences.
+
+    Returns:
+        A dict mapping each nonterminal to a list of floats (one per production
+        rule), suitable for passing to generate_from_cfg as the weights argument.
     """
-
-    cfg3b_str = """
-        22 -> 21 20 | 20 19
-
-        21 -> 18 16 | 16 18 17
-        20 -> 17 16 18 | 16 17
-        19 -> 16 17 18 | 17 18 16
-
-        18 -> 15 14 13 | 14 13
-        17 -> 14 13 15 | 15 13 14
-        16 -> 15 13 | 13 15 14
-
-        15 -> 12 11 10 | 11 12 10
-        14 -> 11 10 12 | 10 11 12
-        13 -> 11 12 | 12 11
-
-        12 -> 8 9 7 | 9 7 8
-        11 -> 8 7 9 | 7 8 9
-        10 -> 7 9 8 | 9 8 7
-
-        9 -> '321' | '21'
-        8 -> '32' | '312'
-        7 -> '31' | '123'
-    """
-
-    print("=== Short grammar (start: 16) ===")
-    cfg_short = CFG.fromstring(cfg3b_short_str)
-    count_generations(cfg_short)
-
-    print("\n=== Full grammar (start: 22) ===")
-    cfg_full = CFG.fromstring(cfg3b_str)
-    count_generations(cfg_full)
+    return _count_per_production(cfg_rules)
