@@ -23,17 +23,29 @@ def generate_from_cfg(
         cfg_rules: dictionary of tokens to recursively sample from.
         weights: optional dict mapping each nonterminal to a list of weights,
             one per production rule. If None, all productions are equally likely.
+            Use uniform_sentence_weights() from cfg_utils to get weights that
+            sample uniformly over all possible sentences.
 
     Returns:
         cfg string of exclusively terminal symbols.
     """
     if symbol not in cfg_rules:  # Terminal symbol reached.
         return symbol
+
     productions = cfg_rules[symbol]
+
+    # If weights are provided for this nonterminal, use them to bias the
+    # selection. random.choices handles normalization internally, so raw
+    # counts (e.g. from uniform_sentence_weights) work directly.
     if weights is not None and symbol in weights:
         production = random.choices(productions, weights=weights[symbol])[0]
+    # Otherwise, pick uniformly among the production rules.
+    # Note: this is uniform over *rules*, not over *sentences* — branches
+    # with fewer downstream sentences will be overrepresented.
     else:
         production = random.choice(productions)
+
+    # Recursively expand each symbol in the chosen production.
     return "".join(generate_from_cfg(sym, cfg_rules, weights) for sym in production)
 
 
