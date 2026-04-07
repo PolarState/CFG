@@ -1,5 +1,4 @@
 import argparse
-import logging
 import os
 import struct
 import sys
@@ -22,13 +21,9 @@ parser.add_argument("--num_generations", default=100, type=int)
 args = parser.parse_args()
 
 
-def generate_dataset_from_cfg(cfg, output_file_path, context_length, num_generations):
+def generate_dataset_from_cfg(cfg, output_file_path, context_length, num_generations, tokenizer):
 
     cfg_start_symbols = list(cfg_generator.get_start_symbols(cfg))[0]
-
-    tokenizer = transformers.GPTNeoXTokenizerFast.from_pretrained(
-        "openai-community/gpt2"
-    )
 
     new_dataset = cfg_datasets.CFGRandomGenerationDataset(
         cfg,
@@ -58,10 +53,15 @@ if __name__ == "__main__":
 
     cfg = cfg_defines.get_cfg(args.cfg)
 
+    tokenizer = transformers.GPTNeoXTokenizerFast.from_pretrained(
+        "openai-community/gpt2"
+    )
+
     generate_dataset_from_cfg(
         cfg=cfg,
         output_file_path=args.output_path,
         context_length=args.context_length,
         num_generations=args.num_generations,
+        tokenizer=tokenizer
     )
     print("COMPLETE")
