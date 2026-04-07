@@ -14,20 +14,27 @@ from typing import Any
 def generate_from_cfg(
     symbol: str,
     cfg_rules: dict[str, str],
+    weights: dict[str, list[float]] | None = None,
 ) -> str:
     """Generate a string from the CFG using recursive expansion.
 
     Args:
         symbol: next symbol to select from.
         cfg_rules: dictionary of tokens to recursively sample from.
+        weights: optional dict mapping each nonterminal to a list of weights,
+            one per production rule. If None, all productions are equally likely.
 
     Returns:
-        cfg string of length max_depth or exclusively terminal symbols.
+        cfg string of exclusively terminal symbols.
     """
     if symbol not in cfg_rules:  # Terminal symbol reached.
         return symbol
-    production = random.choice(cfg_rules[symbol])  # Randomly pick a production rule
-    return "".join(generate_from_cfg(sym, cfg_rules) for sym in production)
+    productions = cfg_rules[symbol]
+    if weights is not None and symbol in weights:
+        production = random.choices(productions, weights=weights[symbol])[0]
+    else:
+        production = random.choice(productions)
+    return "".join(generate_from_cfg(sym, cfg_rules, weights) for sym in production)
 
 
 def get_terminal_symbols(cfg_rules) -> list[Any]:
