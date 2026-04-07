@@ -1,11 +1,7 @@
 # Functions to generate and validate cfg strings from cfg rules.
-# It would be helpful to create either a class to encapsulate this
-# or a dataclass which would hold some state. Reason being, the cfg
-# rules dont hold enough state. We have to derive the terminal and start
-# symbols in a few places and re-deriving them is inefficient.
-# Ultimately this isn't something that is hard or particularly time
-# consuming but if done in a loop is wasteful.
-# ^TODO if generation or validation is in the critical path.
+# These free functions are kept for backwards compatibility. For repeated
+# operations, prefer the CFGrammar class in cfg_grammar.py which caches
+# derived state like terminal symbols, start symbols, and generation counts.
 
 import random
 from typing import Any

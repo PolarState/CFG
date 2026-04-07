@@ -3,7 +3,8 @@ import os
 import struct
 import sys
 
-from cfg import cfg_datasets, cfg_defines, cfg_generator
+from cfg import cfg_datasets, cfg_defines
+from cfg.cfg_grammar import CFGrammar
 
 import transformers
 
@@ -23,11 +24,8 @@ args = parser.parse_args()
 
 def generate_dataset_from_cfg(cfg, output_file_path, context_length, num_generations, tokenizer):
 
-    cfg_start_symbols = list(cfg_generator.get_start_symbols(cfg))[0]
-
     new_dataset = cfg_datasets.CFGRandomGenerationDataset(
         cfg,
-        cfg_start_symbols,
         num_generations=num_generations * 96 * 512,
         tokenizer=tokenizer,
         window_length=context_length,
@@ -51,7 +49,7 @@ if __name__ == "__main__":
             "Cannot overwrite existing dataset without explicit overwrite flag set."
         )
 
-    cfg = cfg_defines.get_cfg(args.cfg)
+    cfg = CFGrammar.from_name(args.cfg)
 
     tokenizer = transformers.GPTNeoXTokenizerFast.from_pretrained(
         "openai-community/gpt2"

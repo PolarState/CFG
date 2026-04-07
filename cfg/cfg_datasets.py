@@ -3,6 +3,7 @@ import struct
 from typing import Any
 
 from . import cfg_generator
+from .cfg_grammar import CFGrammar
 
 import torch
 
@@ -49,7 +50,7 @@ class CFGFileDataset(torch.utils.data.Dataset):
 class CFGRandomGenerationDataset(torch.utils.data.IterableDataset):
     def __init__(
         self,
-        cfg_rules: dict[str, str],
+        cfg_rules: dict[str, list[list[str]]] | CFGrammar,
         num_generations: int,
         tokenizer: Any,
         device: torch.device = torch.device("cpu"),
@@ -57,13 +58,23 @@ class CFGRandomGenerationDataset(torch.utils.data.IterableDataset):
     ):
         """Each CFG could be drawn from infinite times. To satisfy PyTorch Dataset, we ask for the length."""
         super().__init__()
-        self.cfg_rules = cfg_rules
+
+        # Wrap raw rules in a CFGrammar to cache derived state (terminal
+        # symbols, start symbols) rather than re-deriving on each call.
+        if isinstance(cfg_rules, CFGrammar):
+            self.grammar = cfg_rules
+        else:
+            self.grammar = CFGrammar(cfg_rules)
+
+        # Keep cfg_rules as an alias for backwards compatibility with
+        # code that references it directly.
+        self.cfg_rules = self.grammar.rules
+
         self.num_generations = num_generations
         self.idx = 0
         self.window_length = window_length
         self.tokenizer = tokenizer
         self.device = device
-        self.start_symbols = cfg_generator.get_start_symbols(cfg_rules=self.cfg_rules)
 
         # Make the first token the Eos token as it's the divider token between datasets.
         self.generation_buffer = []
@@ -86,9 +97,7 @@ class CFGRandomGenerationDataset(torch.utils.data.IterableDataset):
             self.generation_buffer.extend(self.tokenizer.bos_token)
             self.generation_buffer.extend(
                 self.tokenizer.encode(c)[0]
-                for c in cfg_generator.generate_from_cfg(
-                    random.choice(self.start_symbols), self.cfg_rules
-                )
+                for c in self.grammar.generate()
             )
             self.generation_buffer.extend(self.tokenizer.eos_token)
 
