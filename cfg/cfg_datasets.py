@@ -1,6 +1,9 @@
+import mmap
 import random
 import struct
 from typing import Any
+
+import numpy as np
 
 from . import cfg_generator
 from .cfg_grammar import CFGrammar
@@ -9,9 +12,10 @@ import torch
 
 
 class CFGFileDataset(torch.utils.data.Dataset):
-    """Dataset to load a cfg from a file.
+    """Dataset to load a cfg from a memory-mapped file.
 
-    The file needs to already contain token ids.
+    The file needs to already contain token ids stored as big-endian
+    signed 32-bit integers, grouped into fixed-size windows.
 
     """
 
@@ -20,31 +24,32 @@ class CFGFileDataset(torch.utils.data.Dataset):
         self.device = device
         self.filename = filename
         self.window_length = window_length
+        self.bytes_per_window = window_length * 4  # 4 bytes per int32
 
-        self.dataset = []
+        self._file = open(self.filename, "rb")
+        self._mmap = mmap.mmap(self._file.fileno(), 0, access=mmap.ACCESS_READ)
 
-        with open(self.filename, "rb") as f:
-            while True:
-                bytes_to_read = self.window_length * struct.calcsize("i")
-                binary_chunk = f.read(bytes_to_read)
-                if not binary_chunk:
-                    break  # End of file
-
-                # Unpack the binary data into a tuple of integers
-                format_string = "!" + "i" * self.window_length
-                if len(binary_chunk) != struct.calcsize(format_string):
-                    raise ValueError(
-                        f"Unexpected end of file or corrupted data. Expected {struct.calcsize(format_string)} bytes, got {len(binary_chunk)}."
-                    )
-
-                token_list = list(struct.unpack(format_string, binary_chunk))
-                self.dataset.append(token_list)
+        file_size = self._mmap.size()
+        if file_size % self.bytes_per_window != 0:
+            raise ValueError(
+                f"File size ({file_size}) is not a multiple of window size "
+                f"({self.bytes_per_window} bytes). Data may be corrupted."
+            )
+        self._num_windows = file_size // self.bytes_per_window
 
     def __getitem__(self, index):
-        return torch.tensor(self.dataset[index], device=self.device)
+        offset = index * self.bytes_per_window
+        buf = self._mmap[offset : offset + self.bytes_per_window]
+        # Read as big-endian int32 and convert to native byte order.
+        arr = np.frombuffer(buf, dtype=">i4").astype(np.int64)
+        return torch.from_numpy(arr).to(self.device)
 
     def __len__(self):
-        return len(self.dataset) - 1
+        return self._num_windows - 1
+
+    def __del__(self):
+        self._mmap.close()
+        self._file.close()
 
 
 class CFGRandomGenerationDataset(torch.utils.data.IterableDataset):
