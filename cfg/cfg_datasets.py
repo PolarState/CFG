@@ -19,12 +19,13 @@ class CFGFileDataset(torch.utils.data.Dataset):
 
     """
 
-    def __init__(self, filename, device, window_length: int = 512):
+    def __init__(self, filename, device, window_length: int = 512, reverse: bool = False):
         super().__init__()
         self.device = device
         self.filename = filename
         self.window_length = window_length
         self.bytes_per_window = window_length * 4  # 4 bytes per int32
+        self.reverse = reverse
 
         self._file = open(self.filename, "rb")
         self._mmap = mmap.mmap(self._file.fileno(), 0, access=mmap.ACCESS_READ)
@@ -38,7 +39,10 @@ class CFGFileDataset(torch.utils.data.Dataset):
         self._num_windows = file_size // self.bytes_per_window
 
     def __getitem__(self, index):
-        offset = index * self.bytes_per_window
+        # In reverse mode, iteration order over windows is flipped end-to-front;
+        # window contents themselves are unchanged.
+        physical_index = self._num_windows - 1 - index if self.reverse else index
+        offset = physical_index * self.bytes_per_window
         buf = self._mmap[offset : offset + self.bytes_per_window]
         # Read as big-endian int32 and convert to native byte order.
         arr = np.frombuffer(buf, dtype=">i4").astype(np.int64)
