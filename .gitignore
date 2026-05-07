@@ -1,5 +1,6 @@
 __pycache__/
-datasets/
+datasets/*
+!datasets/README.md
 .DS_Store
 build/
 cfg.egg-info/
