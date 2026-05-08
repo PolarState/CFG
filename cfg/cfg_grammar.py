@@ -126,6 +126,68 @@ class CFGrammar:
         # concatenate the results into a single string.
         return "".join(self._expand(sym, weights) for sym in production)
 
+    def generate_traced(
+        self,
+        symbol: str | None = None,
+        weights: dict[str, list[float]] | None = None,
+    ) -> dict:
+        """Generate a derivation, returning the parse tree instead of just the
+        terminal string.
+
+        The tree is structured so that every node is a dict (Schema B):
+
+          - Internal node:  {"nt": "<NT>", "rule": <int>, "children": [...]}
+          - Terminal leaf:  {"t": "<terminal>"}
+
+        ``rule`` is the index into ``self.rules[nt]`` of the production that
+        was sampled. ``children`` is a list whose length equals the length of
+        the chosen production; each entry is the trace for the corresponding
+        symbol in that production.
+
+        RNG consumption is identical to ``generate()`` — both call
+        ``random.choice``/``random.choices`` exactly once per nonterminal
+        expansion (and once for the start symbol when ``symbol`` is None) —
+        so calling ``generate_traced`` and ``generate`` after ``random.seed(s)``
+        with the same args produces the same derivation.
+        """
+        if symbol is None:
+            # Same RNG consumption pattern as generate() so the seed maps
+            # to the same start-symbol choice.
+            symbol = random.choice(self.start_symbols)
+
+        return self._expand_traced(symbol, weights)
+
+    def _expand_traced(
+        self,
+        symbol: str,
+        weights: dict[str, list[float]] | None,
+    ) -> dict:
+        """Recursive helper for generate_traced. Returns a Schema B node."""
+        # Terminal: emit a leaf node and stop recursing.
+        if symbol not in self.rules:
+            return {"t": symbol}
+
+        productions = self.rules[symbol]
+
+        # Pick a rule using the same RNG primitives as _expand. We pick the
+        # *index* directly so we can record it; using random.randrange /
+        # random.choices(range(...), ...) consumes the same number of RNG
+        # bits as random.choice(productions) / random.choices(productions, ...)
+        # — both call _randbelow(n) once (unweighted) or random() once
+        # (weighted, k=1).
+        if weights is not None and symbol in weights:
+            rule_idx = random.choices(
+                range(len(productions)), weights=weights[symbol]
+            )[0]
+        else:
+            rule_idx = random.randrange(len(productions))
+
+        children = [
+            self._expand_traced(sym, weights)
+            for sym in productions[rule_idx]
+        ]
+        return {"nt": symbol, "rule": rule_idx, "children": children}
+
     def generate_uniform(self, symbol: str | None = None) -> str:
         """Generate a string with uniform probability over all sentences.
 
