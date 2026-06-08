@@ -27,8 +27,7 @@ import time
 
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from build_infinigram import count
+from cfg.indexing.sa import count
 
 VOCAB_NAMES = {0: "1", 1: "2", 2: "3", 3: "eos", 4: "bos"}
 
