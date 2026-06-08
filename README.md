@@ -114,3 +114,68 @@ python scripts/visualize_grammar_dag.py --traces traces.jsonl \
 ```
 
 See each script's `--help` for the full flag surface; see the docstrings in `cfg/indexing/`, `cfg/analysis/` for the underlying library functions.
+
+## N-gram visualizations
+
+`scripts/visualize_ngrams.py` consumes a `.npz` of n-gram counts (from `scripts/compute_ngrams.py`) and produces three views from the same data. The sunburst is the most useful at high depth; the heatmap and trie are kept for the views they expose well.
+
+### Sunburst (interactive HTML)
+
+```bash
+python scripts/visualize_ngrams.py \
+    --npz analysis/my_dataset_ngrams.npz \
+    --output-prefix analysis/my_dataset \
+    --sunburst-depth 6 \
+    --sunburst-color prob \
+    --sunburst-size count
+```
+
+Produces `<output-prefix>_sunburst.html` — an interactive Plotly chart. Each concentric ring is a depth level: ring 1 = unigrams, ring 6 = 6-grams. Hover any wedge for the full n-gram, count, and `P(child | prefix)`. Click a wedge to zoom into its subtree; click the center to zoom back out.
+
+**Color encodes (configurable via `--sunburst-color`):**
+
+| Mode | Encoding | When to use |
+|---|---|---|
+| `prob` (default) | `P(child \| prefix)` on viridis (dark purple → bright yellow) | Spot deterministic vs branching steps. Yellow spokes = "given this prefix, the next token is almost certain." |
+| `logcount` | `log10(count)` on magma | Spot where the bulk of the corpus mass lives. |
+| `token` | Saturated by token identity (amber=terminals, red=eos, blue=bos) | See eos/bos boundary structure. |
+
+**Arc size encodes (configurable via `--sunburst-size`):**
+
+| Mode | Encoding | When to use |
+|---|---|---|
+| `count` (default) | arc ∝ corpus count of the n-gram | Truthful view: big wedges = high-frequency n-grams. |
+| `equal` | every leaf wedge has equal arc; inner rings ∝ leaf count in subtree | Structure-only view: low-frequency paths get the same visual real estate as high-frequency ones. Pair with `--sunburst-color prob` to put all the dynamic range into color. |
+
+**Viewing the HTML:** open directly in any browser (`file://...sunburst.html`), or — if VS Code's preview is unavailable — serve the analysis directory over localhost:
+
+```bash
+cd analysis && python3 -m http.server 8765 --bind 127.0.0.1
+# then open http://localhost:8765/my_dataset_sunburst.html
+```
+
+### Heatmap (PNG/SVG)
+
+`<output-prefix>_heatmap.{png,svg}` — a static matrix of `P(next | prefix-n-gram)`. Rows = non-zero prefixes sorted desc by count, cols = next-token. Cells above `--annot-threshold` (default 0.05) are annotated with the conditional probability. Best for *reading off exact conditional values* at a chosen prefix length (`--prefix-n`, default 5).
+
+### Trie (Graphviz)
+
+`<output-prefix>_trie.{dot,svg}` — a Graphviz tree of every non-zero n-gram up to `--trie-depth` (default 6). Edge labels show `P(child | prefix)`; edge width scales with `log(count)`. Big for high depth (~675 nodes at depth 6 on cfg3b train), but the SVG scrolls cleanly. Best for *enumerating every observed continuation* of a given prefix.
+
+### Prefix-rooted analysis (bos-rooted, etc.)
+
+To restrict the analysis to n-grams starting with a fixed prefix, pass `--prefix` to `compute_ngrams.py`:
+
+```bash
+# Enumerate the 7-grams that start with bos (token id 4 in cfg3b):
+python scripts/compute_ngrams.py \
+    --sa-dir analysis/sa_my_dataset/ \
+    --max-n 6 --prefix 4 \
+    --output-prefix analysis/my_dataset_bos_ngrams
+
+python scripts/visualize_ngrams.py \
+    --npz analysis/my_dataset_bos_ngrams.npz \
+    --output-prefix analysis/my_dataset_bos
+```
+
+The `.npz` stores the prefix IDs alongside the count arrays; the visualizer reads them automatically and titles/labels every view as bos-rooted. The sunburst's root wedge becomes the prefix itself, and the rings underneath show the conditional distribution at each step *after* the prefix.
