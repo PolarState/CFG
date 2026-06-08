@@ -1,8 +1,14 @@
-# This module defines the CFGrammar class, which consolidates the grammar
-# functions from cfg_generator.py and cfg_utils.py into a single object.
-# The class caches derived state (terminal symbols, start symbols, generation
-# counts, sampling weights) so they are computed once rather than re-derived
-# on every call.
+"""CFGrammar — object-oriented wrapper around a CFG dict.
+
+Consolidates the free functions that used to live in cfg_generator.py /
+cfg_utils.py into one class, caching derived state (terminal symbols,
+start symbols, generation counts, uniform sampling weights, reverse
+rule index) so each is computed at most once per instance.
+
+The grammar dict format is ``dict[str, list[list[str]]]``: keys are
+nonterminal symbols, each value is a list of production rules, each
+rule is a list of right-hand-side symbols (terminal or nonterminal).
+"""
 
 import random
 
@@ -415,6 +421,12 @@ class CFGrammar:
         cfg_lengths = {ts: 1 for ts in self.terminal_symbols}
         rules = list(self.rules.keys())
 
+        # Use the rules list as a deferral queue: pop from the end, and if
+        # any referenced child symbol isn't ready yet, push the rule back
+        # to the FRONT so the popper sees fresh candidates first. For
+        # acyclic grammars this terminates in O(N) NT-touches; if the
+        # grammar has a cycle this would loop forever (the caller is
+        # responsible for guaranteeing acyclicity here).
         while rules:
             next_rule = rules.pop()
 
@@ -424,8 +436,9 @@ class CFGrammar:
                 for sym in production:
                     all_syms.add(sym)
 
-            # Check if we have lengths for all referenced symbols.
-            # If not, defer this rule and try again later.
+            # If any referenced symbol's length isn't known yet, defer:
+            # send this rule to the front of the queue so something
+            # else gets a chance first.
             if not all(sym in cfg_lengths for sym in all_syms):
                 rules.insert(0, next_rule)
                 continue

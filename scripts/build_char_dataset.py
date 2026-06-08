@@ -79,6 +79,16 @@ def build_mask_weights(rules: dict, mask_nt: str, mask_idx: int) -> dict:
 
 
 def tokenize_examples(grammar, tokenizer, num_examples, weights=None):
+    """Generate ``num_examples`` from the grammar and tokenize each as
+    ``[bos, ...char_ids..., eos]``.
+
+    Returns a list of (text, ids) pairs so the caller can verify the
+    round-trip — the text is kept alongside the ids for the post-write
+    spot-check in small mode.
+
+    ``weights`` is forwarded to ``grammar.generate`` for masked-rule
+    sampling. RNG state must be pre-seeded by the caller.
+    """
     examples = []
     for _ in range(num_examples):
         text = grammar.generate(weights=weights)
@@ -92,10 +102,21 @@ def tokenize_examples(grammar, tokenizer, num_examples, weights=None):
 
 
 def pack_windows(examples, pad_token_id, window_length):
+    """Concatenate all examples' ids end-to-end and slice into fixed-size windows.
+
+    Example boundaries do NOT align to window boundaries — a long example
+    can span multiple windows, and two short examples can share a window.
+    The on-disk layout that ``CFGFileDataset`` consumes is exactly this
+    flat stream sliced into windows, with the final (possibly partial)
+    window padded with ``pad_token_id`` (= ``eos_token_id`` in this project).
+    """
     flat = []
     for _text, ids in examples:
         flat.extend(ids)
 
+    # Pad the tail to a window boundary so every window has exactly
+    # window_length ids. Without this, write_dataset would assertion-fail
+    # on the final under-full window.
     remainder = len(flat) % window_length
     if remainder != 0:
         flat.extend([pad_token_id] * (window_length - remainder))
@@ -104,6 +125,12 @@ def pack_windows(examples, pad_token_id, window_length):
 
 
 def write_dataset(windows, output_path, window_length):
+    """Serialize windows to disk as a stream of big-endian int32 token ids.
+
+    ``"!" + "i" * window_length`` is the struct format: '!' = network byte
+    order (big-endian), 'i' = 4-byte signed int per token. The asserts
+    catch any partial window that escaped pack_windows.
+    """
     fmt = "!" + "i" * window_length
     with open(output_path, "wb") as f:
         for window in windows:
@@ -112,7 +139,13 @@ def write_dataset(windows, output_path, window_length):
 
 
 def read_flat_stream(output_path, window_length):
-    """Read the file back through CFGFileDataset and concatenate windows."""
+    """Read the file back through CFGFileDataset and concatenate windows.
+
+    This is the inverse of write_dataset for verification purposes:
+    mmap the file, pull each 512-token (2048-byte) window as big-endian
+    int32, and flatten into one long list of ids. Used only for the
+    small-mode round-trip check.
+    """
     dataset = CFGFileDataset(output_path, device="cpu", window_length=window_length)
     file_size = dataset._mmap.size()
     num_windows = file_size // (window_length * 4)
@@ -125,17 +158,31 @@ def read_flat_stream(output_path, window_length):
 
 
 def verify_roundtrip(flat, examples, tokenizer, grammar):
-    """Walk the flat id stream and assert each example is recovered intact."""
+    """Walk the flat id stream and assert each example is recovered intact.
+
+    The stream is ``[bos, ...ids..., eos, bos, ...ids..., eos, ...]`` —
+    we step a cursor forward example by example: confirm a bos at the
+    cursor, scan to the next eos, slice out the inclusive bos..eos range,
+    and check that it equals the original tokenization. Also re-decodes
+    the body to confirm the tokenizer is invertible.
+
+    Raises ``AssertionError`` on any divergence (with example index and
+    expected/actual values) so the small-mode build acts as a self-test.
+    """
     bos_id = tokenizer.bos_token_id
     eos_id = tokenizer.eos_token_id
 
     cursor = 0
     for idx, (orig_text, orig_ids) in enumerate(examples):
+        # Position 0 of every example is a bos. If not, packing went wrong.
         if cursor >= len(flat) or flat[cursor] != bos_id:
             raise AssertionError(
                 f"example {idx}: expected bos at position {cursor}, got "
                 f"{flat[cursor] if cursor < len(flat) else 'EOF'}"
             )
+        # Scan forward for the matching eos. Pad tokens are also eos by
+        # convention, so a truncated last example would silently match;
+        # the "ran off end" guard below catches that.
         end = cursor + 1
         while end < len(flat) and flat[end] != eos_id:
             end += 1

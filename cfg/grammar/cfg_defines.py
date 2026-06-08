@@ -1,3 +1,23 @@
+"""Built-in grammar definitions, keyed by name.
+
+Each grammar is a ``dict[str, list[list[str]]]`` in the format consumed
+by ``CFGrammar``: keys are nonterminal symbols (string-numeric ids
+chosen so the same id space is reusable across grammars), and each
+value is a list of production rules where each rule is a list of
+right-hand-side symbols (terminals or nonterminals).
+
+Conventions:
+  - Nonterminals are ids 7..22, organized by depth: 7-9 (deepest, expand
+    only to terminals), 10-12, 13-15, 16-18, 19-22 (start symbols).
+  - Terminals are the literal strings '1', '2', '3'.
+  - The start symbol of each grammar is the highest-numbered NT (22 here),
+    which CFGrammar derives automatically as "the NT that never appears
+    on a RHS".
+
+Looking these up by name via ``get_cfg(name)`` is how
+``CFGrammar.from_name`` resolves a grammar.
+"""
+
 cfg3b = {
     "22": [["21", "20"], ["20", "19"]],
     "21": [["18", "16"], ["16", "18", "17"]],
