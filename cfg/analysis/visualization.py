@@ -1,11 +1,17 @@
-"""n-gram visualizations: heatmap, trie, sunburst.
+"""CFG visualizations: n-gram views and grammar DAG.
 
-All renderers take a dict of n-gram count arrays (the output of
-``cfg.analysis.ngrams.enumerate_ngrams`` or a ``np.load()`` of its .npz
-output) and produce on-disk artifacts. None of the functions mutate
-the input arrays.
+Two families of renderers:
 
-Input dict structure:
+  n-gram views (heatmap, trie, sunburst) take a dict of n-gram count
+  arrays (the output of ``cfg.analysis.ngrams.enumerate_ngrams`` or a
+  ``np.load()`` of its .npz output) and produce on-disk artifacts.
+
+  grammar DAG takes aggregated (NT, rule)-choice counts from parse-tree
+  traces and renders the production graph rolled up by NT.
+
+None of the functions mutate their inputs.
+
+n-gram arrays dict structure:
 
   n1, n2, ..., n{max_n}     dense int64 arrays, shape (V,)*k
   prefix (optional)         int64 1-d array of fixed prefix IDs
@@ -25,10 +31,18 @@ API:
   render_sunburst(arrays, output_prefix, max_depth=6,
                   vocab_names=None, n_terminals=3,
                   color_mode="prob", size_mode="count") -> html_path
+  aggregate_traces(traces_path, progress_seconds=10.0)
+                                                       -> (n_trees, rule_counts, nt_counts)
+  render_grammar_dag(grammar, rule_counts, nt_counts, n_trees,
+                     output_prefix, source_label="", grammar_name="")
+                                                       -> (dot_path, svg_path)
 """
 
+import json
 import os
 import subprocess
+import time
+from collections import Counter
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -375,3 +389,130 @@ def render_sunburst(arrays, output_prefix, max_depth=6,
     html_path = output_prefix + "_sunburst.html"
     fig.write_html(html_path, include_plotlyjs="cdn")
     return html_path
+
+
+# ── Grammar DAG ───────────────────────────────────────────────────────────
+
+
+def _walk_tree(node, rule_counts, nt_counts):
+    """Recursive tree walk: increment (nt, rule) and nt counts."""
+    if "t" in node:
+        return
+    nt = node["nt"]
+    rule_counts[(nt, node["rule"])] += 1
+    nt_counts[nt] += 1
+    for child in node["children"]:
+        _walk_tree(child, rule_counts, nt_counts)
+
+
+def aggregate_traces(traces_path, progress_seconds=10.0):
+    """Stream a JSONL parse-trace file and aggregate counts.
+
+    Each line of ``traces_path`` is one parse tree (Schema B); see
+    ``scripts/dump_traces.py``. Returns ``(n_trees, rule_counts, nt_counts)``
+    where ``rule_counts`` is a ``Counter`` keyed by ``(nt, rule_idx)``
+    and ``nt_counts`` is keyed by ``nt``.
+
+    Prints a one-line progress update every ``progress_seconds`` seconds.
+    """
+    rule_counts = Counter()
+    nt_counts = Counter()
+    n_trees = 0
+    t0 = time.time()
+    last = t0
+    with open(traces_path) as f:
+        for line in f:
+            _walk_tree(json.loads(line), rule_counts, nt_counts)
+            n_trees += 1
+            now = time.time()
+            if now - last >= progress_seconds:
+                rate = n_trees / (now - t0)
+                print(
+                    f"  {n_trees:>10,} trees  {rate:.0f}/s  elapsed={now - t0:.0f}s",
+                    flush=True,
+                )
+                last = now
+    return n_trees, rule_counts, nt_counts
+
+
+def render_grammar_dag(grammar, rule_counts, nt_counts, n_trees,
+                       output_prefix, source_label="", grammar_name=""):
+    """Render the grammar DAG as DOT + SVG.
+
+    One node per NT, one node per terminal, one "rule" midpoint per
+    production. NT → rule edges show count + frequency-among-this-NT;
+    rule → child edges show child position. The "DAG" framing means
+    counts roll up by NT: every expansion of (say) NT 7 is pooled into
+    the same outgoing edges regardless of where in the tree it appeared.
+
+    Returns ``(dot_path, svg_path)``.
+    """
+    nt_order = sorted(grammar.rules.keys(), key=int)
+    terminals = list(grammar.terminal_symbols)
+
+    title_subj = f"{grammar_name} grammar DAG" if grammar_name else "grammar DAG"
+    title_extra = f" from {source_label}" if source_label else ""
+
+    lines = [
+        "digraph grammar_dag {",
+        "  rankdir=TB;",
+        '  graph [fontname="Helvetica", labelloc="t", '
+        f'label=<<b>{title_subj}</b><br/>'
+        f"<i>aggregated over {n_trees:,} trees{title_extra}</i>>];",
+        '  node [fontname="Helvetica"];',
+        '  edge [fontname="Helvetica", fontsize=9];',
+        "",
+        "  // nonterminals",
+    ]
+
+    for nt in nt_order:
+        n = nt_counts.get(nt, 0)
+        lines.append(
+            f'  "{nt}" [shape=ellipse, style=filled, fillcolor="#dbe9ff", '
+            f'label=<<b>NT {nt}</b><br/><font point-size="9">{n:,} expansions</font>>];'
+        )
+
+    lines.append("")
+    lines.append("  // terminals")
+    lines.append("  { rank=sink;")
+    for t in terminals:
+        lines.append(
+            f'    "T_{t}" [shape=box, style="filled,rounded", '
+            f'fillcolor="#ffe9c2", label=<<b>\'{t}\'</b>>];'
+        )
+    lines.append("  }")
+
+    lines.append("")
+    lines.append("  // productions")
+    for nt in nt_order:
+        total = nt_counts.get(nt, 0)
+        for rule_idx, prod in enumerate(grammar.rules[nt]):
+            cnt = rule_counts.get((nt, rule_idx), 0)
+            frac = (cnt / total * 100.0) if total > 0 else 0.0
+            rule_id = f"r_{nt}_{rule_idx}"
+            prod_str = " ".join(prod)
+            lines.append(
+                f'  "{rule_id}" [shape=box, style="filled,rounded", '
+                f'fillcolor="#f3f3f3", fontsize=10, '
+                f"label=<r{rule_idx}: <b>{cnt:,}</b> "
+                f'({frac:.1f}%)<br/><font point-size="8">→ {prod_str}</font>>];'
+            )
+            lines.append(
+                f'  "{nt}" -> "{rule_id}" [penwidth={max(0.5, min(6.0, frac / 15.0)):.2f}];'
+            )
+            for pos, sym in enumerate(prod, start=1):
+                target = f"T_{sym}" if sym in terminals else sym
+                lines.append(
+                    f'  "{rule_id}" -> "{target}" '
+                    f'[label="{pos}", fontsize=8, arrowsize=0.7, color="#888888"];'
+                )
+
+    lines.append("}")
+    dot_text = "\n".join(lines) + "\n"
+
+    dot_path = output_prefix + ".dot"
+    svg_path = output_prefix + ".svg"
+    with open(dot_path, "w") as f:
+        f.write(dot_text)
+    subprocess.run(["dot", "-Tsvg", dot_path, "-o", svg_path], check=True)
+    return dot_path, svg_path
