@@ -33,7 +33,7 @@ import random
 import sys
 import time
 
-from cfg.cfg_grammar import CFGrammar
+from cfg.grammar.cfg_grammar import CFGrammar
 
 
 def parse_mask_rule(spec: str, rules: dict) -> tuple[str, int]:

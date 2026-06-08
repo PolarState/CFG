@@ -3,9 +3,9 @@
 from nltk import CFG as NLTK_CFG
 from nltk.grammar import Nonterminal
 
-from cfg.cfg_defines import cfg_by_name
-from cfg.cfg_utils import count_generations
-from cfg.cfg_generator import get_start_symbols
+from cfg.grammar.cfg_defines import cfg_by_name
+from cfg.grammar.cfg_utils import count_generations
+from cfg.grammar.cfg_generator import get_start_symbols
 
 
 # ── NLTK implementation (for comparison) ──────────────────────────────────

@@ -33,10 +33,10 @@ import time
 
 import numpy as np
 
-from cfg.cfg_datasets import CFGFileDataset
-from cfg.cfg_grammar import CFGrammar
-from cfg.cfg_tokenizers import CFGCharacterTokenizer
-from cfg.hf_adapter import HFTokenizerAdapter
+from cfg.grammar.cfg_datasets import CFGFileDataset
+from cfg.grammar.cfg_grammar import CFGrammar
+from cfg.grammar.cfg_tokenizers import CFGCharacterTokenizer
+from cfg.grammar.hf_adapter import HFTokenizerAdapter
 
 
 # ── Small mode (with full verification) ────────────────────────────────

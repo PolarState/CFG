@@ -2,9 +2,9 @@
 # These verify that the class produces the same results as the free
 # functions it consolidates, and that cached state is correct.
 
-from cfg.cfg_grammar import CFGrammar
-from cfg.cfg_defines import cfg_by_name
-from cfg import cfg_generator, cfg_utils
+from cfg.grammar.cfg_grammar import CFGrammar
+from cfg.grammar.cfg_defines import cfg_by_name
+from cfg.grammar import cfg_generator, cfg_utils
 
 
 def test_construction_from_dict():

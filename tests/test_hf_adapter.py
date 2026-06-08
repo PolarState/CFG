@@ -2,8 +2,8 @@
 
 import torch
 
-from cfg.cfg_tokenizers import CFGCharacterTokenizer
-from cfg.hf_adapter import HFTokenizerAdapter
+from cfg.grammar.cfg_tokenizers import CFGCharacterTokenizer
+from cfg.grammar.hf_adapter import HFTokenizerAdapter
 
 
 def _make_adapter():

@@ -29,7 +29,7 @@ import sys
 import time
 from collections import Counter
 
-from cfg.cfg_grammar import CFGrammar
+from cfg.grammar.cfg_grammar import CFGrammar
 
 
 def parse_args():
