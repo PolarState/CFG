@@ -112,8 +112,8 @@ def test_small_grammar_against_exhaustive():
 def test_weighted_sampling_uniformity():
     """Verify that uniform_sentence_weights produces a flat distribution over sentences."""
     from collections import Counter
-    from cfg.cfg_utils import uniform_sentence_weights
-    from cfg.cfg_generator import generate_from_cfg
+    from cfg.grammar.cfg_utils import uniform_sentence_weights
+    from cfg.grammar.cfg_generator import generate_from_cfg
 
     # Small grammar: S has 2 rules, one leads to 4 sentences, the other to 1.
     # Without weights: P(branch A) = 0.5, P(branch B) = 0.5 -> non-uniform over sentences.
