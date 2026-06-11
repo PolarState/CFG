@@ -136,6 +136,45 @@ def _count_per_production(cfg_rules):
     return prod_counts
 
 
+def parse_mask_rule(spec, cfg_rules):
+    """Parse '<NT>:<INDEX>' (e.g. '7:0') and validate against the grammar.
+
+    Shared by the dataset/trace builders and the exact-distribution
+    script so the masking syntax can never drift between them.
+    """
+    # The spec must contain a separator; split on the first ':' only so
+    # the index part can be validated as an integer below.
+    if ":" not in spec:
+        raise ValueError(f"--mask-rule must be 'NT:INDEX', got {spec!r}")
+    nt, idx_str = spec.split(":", 1)
+    # The nonterminal must exist in the grammar.
+    if nt not in cfg_rules:
+        raise ValueError(f"NT {nt!r} not in grammar; valid: {sorted(cfg_rules.keys())}")
+    # The rule index must be in range for that nonterminal.
+    idx = int(idx_str)
+    if not (0 <= idx < len(cfg_rules[nt])):
+        raise ValueError(
+            f"NT {nt!r} has {len(cfg_rules[nt])} rules, index {idx} out of range"
+        )
+    return nt, idx
+
+
+def build_mask_weights(cfg_rules, mask_nt, mask_idx):
+    """Weights dict: 1.0 for every rule except the masked one (0.0).
+
+    Passed to CFGrammar.generate(weights=...). random.choices treats a
+    weight of 0 as never-selected, so the masked production is fully
+    suppressed without modifying the grammar object.
+    """
+    return {
+        nt: [
+            0.0 if (nt == mask_nt and i == mask_idx) else 1.0
+            for i in range(len(prods))
+        ]
+        for nt, prods in cfg_rules.items()
+    }
+
+
 def uniform_sentence_weights(cfg_rules):
     """Compute production weights that sample uniformly over all possible sentences.
 

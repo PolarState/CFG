@@ -36,6 +36,7 @@ import numpy as np
 from cfg.grammar.cfg_datasets import CFGFileDataset
 from cfg.grammar.cfg_grammar import CFGrammar
 from cfg.grammar.cfg_tokenizers import CFGCharacterTokenizer
+from cfg.grammar.cfg_utils import build_mask_weights, parse_mask_rule
 from cfg.grammar.hf_adapter import HFTokenizerAdapter
 
 
@@ -45,37 +46,6 @@ from cfg.grammar.hf_adapter import HFTokenizerAdapter
 def build_tokenizer(grammar: CFGrammar) -> HFTokenizerAdapter:
     char_tok = CFGCharacterTokenizer(vocab=grammar.terminal_symbols)
     return HFTokenizerAdapter(char_tok)
-
-
-def parse_mask_rule(spec: str, rules: dict) -> tuple[str, int]:
-    """Parse '<NT>:<INDEX>' (e.g. '7:0') and validate against the grammar."""
-    if ":" not in spec:
-        raise ValueError(f"--mask-rule must be 'NT:INDEX', got {spec!r}")
-    nt, idx_str = spec.split(":", 1)
-    if nt not in rules:
-        raise ValueError(f"NT {nt!r} not in grammar; valid: {sorted(rules.keys())}")
-    idx = int(idx_str)
-    if not (0 <= idx < len(rules[nt])):
-        raise ValueError(
-            f"NT {nt!r} has {len(rules[nt])} rules, index {idx} out of range"
-        )
-    return nt, idx
-
-
-def build_mask_weights(rules: dict, mask_nt: str, mask_idx: int) -> dict:
-    """Weights dict: 1.0 for every rule except the masked one (0.0).
-
-    Passed to CFGrammar.generate(weights=...). random.choices treats a
-    weight of 0 as never-selected, so the masked production is fully
-    suppressed without modifying the grammar object.
-    """
-    return {
-        nt: [
-            0.0 if (nt == mask_nt and i == mask_idx) else 1.0
-            for i in range(len(prods))
-        ]
-        for nt, prods in rules.items()
-    }
 
 
 def tokenize_examples(grammar, tokenizer, num_examples, weights=None):

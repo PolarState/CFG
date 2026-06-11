@@ -34,36 +34,7 @@ import sys
 import time
 
 from cfg.grammar.cfg_grammar import CFGrammar
-
-
-def parse_mask_rule(spec: str, rules: dict) -> tuple[str, int]:
-    """Parse '<NT>:<INDEX>' (e.g. '7:0') and validate against the grammar.
-
-    Same semantics as build_char_dataset.parse_mask_rule, kept duplicated
-    here so this script has no dependency on that module.
-    """
-    if ":" not in spec:
-        raise ValueError(f"--mask-rule must be 'NT:INDEX', got {spec!r}")
-    nt, idx_str = spec.split(":", 1)
-    if nt not in rules:
-        raise ValueError(f"NT {nt!r} not in grammar; valid: {sorted(rules.keys())}")
-    idx = int(idx_str)
-    if not (0 <= idx < len(rules[nt])):
-        raise ValueError(
-            f"NT {nt!r} has {len(rules[nt])} rules, index {idx} out of range"
-        )
-    return nt, idx
-
-
-def build_mask_weights(rules: dict, mask_nt: str, mask_idx: int) -> dict:
-    """Weights dict suppressing one rule (weight 0 for masked, 1 for kept)."""
-    return {
-        nt: [
-            0.0 if (nt == mask_nt and i == mask_idx) else 1.0
-            for i in range(len(prods))
-        ]
-        for nt, prods in rules.items()
-    }
+from cfg.grammar.cfg_utils import build_mask_weights, parse_mask_rule
 
 
 def parse_args():
