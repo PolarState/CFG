@@ -30,7 +30,10 @@ class BigramTableModel(torch.nn.Module):
         # A dummy parameter so next(model.parameters()) yields a device.
         self.dummy = torch.nn.Parameter(torch.zeros(1))
 
-    def forward(self, input_ids):
+    def forward(self, input_ids, attention_mask=None):
+        # attention_mask is accepted (decision_points passes one for
+        # padded batches) but irrelevant here: each position's logits
+        # depend only on its own token.
         logits = self.table[input_ids]
         return type("Out", (), {"logits": logits})()
 
